@@ -120,6 +120,10 @@ export default function App() {
     };
 
     loadProducts();
+
+    const interval = setInterval(loadProducts, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const list = useMemo(
