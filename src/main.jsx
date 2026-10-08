@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Pill,
@@ -15,47 +15,133 @@ import {
   ShoppingBag,
   ChevronRight,
 } from "lucide-react";
+import Papa from "papaparse";
 import logo from "./public/logo.jpg";
 import "./styles.css";
 
-const products = [
-  ["Paracetamol 500 mg", "Pain & Fever", 3.5, "per tablet"],
-  ["Vitamin C 500 mg", "Vitamins", 8, "per tablet"],
-  ["Cetirizine 10 mg", "Allergy", 5, "per tablet"],
-  ["Omeprazole 20 mg", "Gastro", 7.5, "per capsule"],
-  ["Oral Rehydration Salts", "First Aid", 18, "per sachet"],
-  ["Alcohol 70% 500 mL", "First Aid", 55, "per bottle"],
-  ["Multivitamins", "Vitamins", 12, "per tablet"],
-  ["Antacid Tablets", "Gastro", 6, "per tablet"],
-];
-const cats = ["All", ...new Set(products.map((p) => p[1]))];
+const GOOGLE_SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwgI-Xz7DS-BX1rUmFPqg0L5Zy9QmU-92VEIoPbSowJlYGf717BV4ViUxvyTfxWmDaYyGgOqWRppAi/pub?output=csv";
+
+const parseCSV = (csv) => {
+  const lines = csv
+    .trim()
+    .split(/\r?\n/)
+    .filter((line) => line.trim());
+
+  if (lines.length < 2) {
+    return [];
+  }
+
+  const headers = lines[0]
+    .split(",")
+    .map((header) => header.trim().toLowerCase());
+
+  return lines.slice(1).map((line) => {
+    const values = line.split(",");
+
+    const row = {};
+
+    headers.forEach((header, index) => {
+      row[header] = values[index]?.trim() || "";
+    });
+
+    return {
+      name: row.name,
+      category: row.category,
+      price: Number(row.price) || 0,
+      unit: row.unit,
+    };
+  });
+};
 
 export default function App() {
-  const [tab, setTab] = useState("home"),
-    [q, setQ] = useState(""),
-    [cat, setCat] = useState("All"),
-    [page, setPage] = useState(1);
+  const [tab, setTab] = useState("home");
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("All");
+  const [page, setPage] = useState(1);
+
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [productError, setProductError] = useState("");
 
   const itemsPerPage = 10;
+
+  const cats = useMemo(
+    () => ["All", ...new Set(products.map((p) => p.category).filter(Boolean))],
+    [products],
+  );
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setLoadingProducts(true);
+        setProductError("");
+
+        const response = await fetch(GOOGLE_SHEET_URL);
+
+        if (!response.ok) {
+          throw new Error("Unable to load product list.");
+        }
+
+        const csv = await response.text();
+
+        Papa.parse(csv, {
+          header: true,
+          skipEmptyLines: true,
+
+          complete: (results) => {
+            const formattedProducts = results.data
+              .map((row) => ({
+                name: row.name?.trim() || "",
+                category: row.category?.trim() || "",
+                price: Number(row.price) || 0,
+                unit: row.unit?.trim() || "",
+              }))
+              .filter((product) => product.name);
+
+            setProducts(formattedProducts);
+            setLoadingProducts(false);
+          },
+
+          error: () => {
+            setProductError("Unable to read product data.");
+            setLoadingProducts(false);
+          },
+        });
+      } catch (error) {
+        console.error(error);
+
+        setProductError(
+          "Unable to load the price list. Please try again later.",
+        );
+
+        setLoadingProducts(false);
+      }
+    };
+
+    loadProducts();
+  }, []);
 
   const list = useMemo(
     () =>
       products.filter(
         (p) =>
-          (cat === "All" || p[1] === cat) &&
+          (cat === "All" || p.category === cat) &&
           (!q ||
-            p[0].toLowerCase().includes(q.toLowerCase()) ||
-            p[1].toLowerCase().includes(q.toLowerCase())),
+            p.name.toLowerCase().includes(q.toLowerCase()) ||
+            p.category.toLowerCase().includes(q.toLowerCase())),
       ),
-    [q, cat],
+    [products, q, cat],
   );
 
   const totalPages = Math.ceil(list.length / itemsPerPage);
 
   const paginatedList = useMemo(() => {
     const start = (page - 1) * itemsPerPage;
+
     return list.slice(start, start + itemsPerPage);
   }, [list, page]);
+
   const go = (t) => {
     setTab(t);
     scrollTo({ top: 0, behavior: "smooth" });
@@ -210,19 +296,19 @@ export default function App() {
           </div>
           <div className="products">
             {paginatedList.map((p) => (
-              <div key={p[0]} className="product">
+              <div key={p.name} className="product">
                 <div className="picon">
                   <Pill />
                 </div>
 
                 <div>
-                  <b>{p[0]}</b>
+                  <b>{p.name}</b>
                   <small>
-                    {p[1]} · {p[3]}
+                    {p.category} · {p.unit}
                   </small>
                 </div>
 
-                <strong>₱{p[2].toFixed(2)}</strong>
+                <strong>₱{Number(p.price || 0).toFixed(2)}</strong>
               </div>
             ))}
           </div>
