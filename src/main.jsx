@@ -33,7 +33,11 @@ const cats = ["All", ...new Set(products.map((p) => p[1]))];
 export default function App() {
   const [tab, setTab] = useState("home"),
     [q, setQ] = useState(""),
-    [cat, setCat] = useState("All");
+    [cat, setCat] = useState("All"),
+    [page, setPage] = useState(1);
+
+  const itemsPerPage = 10;
+
   const list = useMemo(
     () =>
       products.filter(
@@ -45,6 +49,13 @@ export default function App() {
       ),
     [q, cat],
   );
+
+  const totalPages = Math.ceil(list.length / itemsPerPage);
+
+  const paginatedList = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    return list.slice(start, start + itemsPerPage);
+  }, [list, page]);
   const go = (t) => {
     setTab(t);
     scrollTo({ top: 0, behavior: "smooth" });
@@ -161,7 +172,10 @@ export default function App() {
             <Search />
             <input
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setPage(1);
+              }}
               placeholder="Search medicine or product..."
             />
           </div>
@@ -170,28 +184,85 @@ export default function App() {
               <button
                 key={c}
                 className={cat === c ? "sel" : ""}
-                onClick={() => setCat(c)}
+                onClick={() => {
+                  setCat(c);
+                  setPage(1);
+                }}
               >
                 {c}
               </button>
             ))}
           </div>
+          <div className="price-summary">
+            <span>
+              Showing{" "}
+              <strong>
+                {list.length === 0 ? 0 : (page - 1) * itemsPerPage + 1}
+                {"–"}
+                {Math.min(page * itemsPerPage, list.length)}
+              </strong>{" "}
+              of <strong>{list.length}</strong> products
+            </span>
+
+            <span className="page-label">
+              Page {page} of {totalPages || 1}
+            </span>
+          </div>
           <div className="products">
-            {list.map((p) => (
+            {paginatedList.map((p) => (
               <div key={p[0]} className="product">
                 <div className="picon">
                   <Pill />
                 </div>
+
                 <div>
                   <b>{p[0]}</b>
                   <small>
                     {p[1]} · {p[3]}
                   </small>
                 </div>
+
                 <strong>₱{p[2].toFixed(2)}</strong>
               </div>
             ))}
           </div>
+          {totalPages > 1 && (
+            <div className="pagination">
+              <button
+                className="page-btn"
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Previous
+              </button>
+
+              <div className="page-numbers">
+                {Array.from({ length: totalPages }, (_, index) => {
+                  const pageNumber = index + 1;
+
+                  return (
+                    <button
+                      key={pageNumber}
+                      className={`page-number ${
+                        page === pageNumber ? "active" : ""
+                      }`}
+                      onClick={() => setPage(pageNumber)}
+                    >
+                      {pageNumber}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                className="page-btn"
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          )}
           <div className="notice">
             <Info />
             <p>
